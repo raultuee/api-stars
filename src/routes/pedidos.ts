@@ -7,7 +7,8 @@ const router = Router();
 router.post("/", async (req, res) => {
   try {
     const {
-      itens, // Agora a requisição espera um array de itens
+      itens, // Recebe o array de itens
+      data_pedido,
       nome_destinario,
       telefone_contato,
       cep,
@@ -16,47 +17,54 @@ router.post("/", async (req, res) => {
       bairro,
       complemento,
       forma_pagamento,
+      valor_total
     } = req.body;
 
-    // Validar campos obrigatórios, incluindo o array de itens
-    if (!itens || itens.length === 0 || !nome_destinario || 
-        !telefone_contato || !cep || !rua || !numero || !bairro || 
-        !forma_pagamento) {
-      return res.status(400).json({ 
-        error: "Campos obrigatórios não preenchidos" 
+    // Verifique se o array de itens existe e não está vazio
+    if (!itens || itens.length === 0) {
+      return res.status(400).json({
+        error: "Nenhum item de pedido foi fornecido"
       });
     }
 
-    // Calcula o valor total a partir dos preços dos itens + frete
-    const valor_total = itens.reduce((acc: number, item: any) => acc + item.preco, 0) + 10;
+    const pedidosCriados = [];
 
-    const pedido = new Pedidos({
-      itens,
-      nome_destinario,
-      telefone_contato,
-      cep,
-      rua,
-      numero: Number(numero),
-      bairro,
-      complemento,
-      forma_pagamento,
-      valor_total
-    });
+    // Itera sobre o array de itens
+    for (const item of itens) {
+      const pedido = new Pedidos({
+        id_camiseta: item.id_camiseta,
+        slug: item.slug,
+        tamanho: item.tamanho,
+        tipo_camiseta: item.tipo_camiseta,
+        cupom: item.cupom || false,
+        nome_destinario,
+        telefone_contato,
+        cep,
+        rua,
+        numero: Number(numero),
+        bairro,
+        complemento,
+        forma_pagamento,
+        valor_total: Number(valor_total) // Valor total é do pedido completo, não do item
+      });
 
-    await pedido.save();
+      await pedido.save();
+      pedidosCriados.push(pedido);
+    }
     
     res.status(201).json({
       message: "Pedido criado com sucesso!",
-      pedido: pedido
+      pedidos: pedidosCriados
     });
   } catch (err: any) {
     console.error('Erro ao criar pedido:', err);
-    res.status(400).json({ 
+    res.status(400).json({
       error: "Erro ao criar pedido",
-      details: err.message 
+      details: err.message
     });
   }
 });
+
 
 // Listar todos os pedidos
 router.get("/", async (req, res) => {
