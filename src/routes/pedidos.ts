@@ -16,7 +16,7 @@ router.post("/", async (req, res) => {
       bairro,
       complemento,
       forma_pagamento,
-      valor_total // Este valor total é para o pedido completo
+      valor_total
     } = req.body;
 
     // Garante que o array de itens existe
@@ -45,7 +45,8 @@ router.post("/", async (req, res) => {
         bairro,
         complemento,
         forma_pagamento,
-        valor_total: item.preco // Salva o preço individual do item
+        // É mais lógico usar o valor_total do pedido completo, em vez do preço individual do item.
+        valor_total: valor_total
       });
 
       // Salva o pedido no banco de dados
