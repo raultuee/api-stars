@@ -7,8 +7,7 @@ const router = Router();
 router.post("/", async (req, res) => {
   try {
     const {
-      itens, // Recebe o array de itens
-      data_pedido,
+      itens, // Recebe o array de itens do frontend
       nome_destinario,
       telefone_contato,
       cep,
@@ -17,11 +16,11 @@ router.post("/", async (req, res) => {
       bairro,
       complemento,
       forma_pagamento,
-      valor_total
+      valor_total // Este valor total é para o pedido completo
     } = req.body;
 
-    // Verifique se o array de itens existe e não está vazio
-    if (!itens || itens.length === 0) {
+    // Garante que o array de itens existe
+    if (!itens || !Array.isArray(itens) || itens.length === 0) {
       return res.status(400).json({
         error: "Nenhum item de pedido foi fornecido"
       });
@@ -29,14 +28,15 @@ router.post("/", async (req, res) => {
 
     const pedidosCriados = [];
 
-    // Itera sobre o array de itens
+    // Itera sobre o array de itens para salvar cada um separadamente
     for (const item of itens) {
       const pedido = new Pedidos({
+        // Mapeia os dados do item para o esquema Pedido
         id_camiseta: item.id_camiseta,
         slug: item.slug,
         tamanho: item.tamanho,
         tipo_camiseta: item.tipo_camiseta,
-        cupom: item.cupom || false,
+        cupom: item.cupom || false, // 'cupom' pode não existir, então use um fallback
         nome_destinario,
         telefone_contato,
         cep,
@@ -45,15 +45,16 @@ router.post("/", async (req, res) => {
         bairro,
         complemento,
         forma_pagamento,
-        valor_total: Number(valor_total) // Valor total é do pedido completo, não do item
+        valor_total: item.preco // Salva o preço individual do item
       });
 
+      // Salva o pedido no banco de dados
       await pedido.save();
       pedidosCriados.push(pedido);
     }
     
     res.status(201).json({
-      message: "Pedido criado com sucesso!",
+      message: "Pedidos criados com sucesso!",
       pedidos: pedidosCriados
     });
   } catch (err: any) {
