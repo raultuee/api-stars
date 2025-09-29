@@ -1,7 +1,33 @@
-import { Schema, model, Model } from "mongoose";
+import { Schema, model, Model, Document } from "mongoose";
+
+// Interface para o item do carrinho para garantir a tipagem
+interface ICarrinhoItem {
+    id_camiseta: string;
+    slug?: string;
+    tamanho: "P" | "M" | "G" | "GG";
+    tipo_camiseta: "Oversized" | "Regular";
+    preco: number;
+}
+
+// Interface principal que representa o documento do Pedido
+// Adicionamos 'export' para que ela possa ser importada em outros arquivos
+export interface IPedido extends Document {
+  id: number;
+  data_pedido: Date;
+  nome_destinario: string;
+  telefone_contato: string;
+  cep: string;
+  rua: string;
+  numero: number;
+  bairro: string;
+  complemento?: string;
+  forma_pagamento: "Cartão" | "PIX" | "Dinheiro";
+  valor_total: number;
+  itens: ICarrinhoItem[];
+}
 
 // Sub-schema para o item do carrinho
-const CarrinhoItemSchema = new Schema({
+const CarrinhoItemSchema = new Schema<ICarrinhoItem>({
     id_camiseta: { type: String, required: true },
     slug: { type: String },
     tamanho: { 
@@ -14,33 +40,25 @@ const CarrinhoItemSchema = new Schema({
         enum: ["Oversized", "Regular"], 
         required: true 
     },
-    // cupom: { type: Boolean, default: false },
     preco: { type: Number, required: true }
 });
 
-const PedidoSchema = new Schema({
-  // Pedido
+const PedidoSchema = new Schema<IPedido>({
   id: { type: Number, unique: true },
   data_pedido: { type: Date, default: Date.now },
   nome_destinario: { type: String, required: true },
   telefone_contato: { type: String, required: true },
-  
-  // Endereço
   cep: { type: String, required: true },
   rua: { type: String, required: true },
   numero: { type: Number, required: true },
   bairro: { type: String, required: true },
   complemento: { type: String },
-  
-  // Financeiro
   forma_pagamento: { 
     type: String, 
     enum: ["Cartão", "PIX", "Dinheiro"], 
     required: true 
   },
   valor_total: { type: Number, required: true },
-  
-  // ITENS DO PEDIDO (Novo array)
   itens: {
     type: [CarrinhoItemSchema],
     required: true,
@@ -51,14 +69,13 @@ const PedidoSchema = new Schema({
 });
 
 // Middleware para gerar ID sequencial
-PedidoSchema.pre('save', async function(next) {
-  const Pedido = this.constructor as Model<any>;
-
+PedidoSchema.pre<IPedido>('save', async function(next) {
   if (this.isNew) {
-    const lastPedido = await Pedido.findOne().sort({ id: -1 });
+    const PedidoModel = this.constructor as Model<IPedido>;
+    const lastPedido = await PedidoModel.findOne().sort({ id: -1 });
     this.id = lastPedido ? lastPedido.id + 1 : 1;
   }
   next();
 });
 
-export default model("Pedido", PedidoSchema);
+export default model<IPedido>("Pedido", PedidoSchema);

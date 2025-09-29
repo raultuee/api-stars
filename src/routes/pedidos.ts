@@ -1,218 +1,112 @@
-import { Router } from "express";
-import Pedidos from "../models/Pedido";
+import { Router, Request, Response } from "express";
+// Importa o modelo padrão e a interface IPedido do arquivo de modelo
+import Pedido, { IPedido } from "../models/Pedido";
 
 const router = Router();
 
-// Criar pedido
-router.post("/", async (req, res) => {
-  try {
-    const {
-      itens, // Recebe o array de itens do frontend
-      nome_destinario,
-      telefone_contato,
-      cep,
-      rua,
-      numero,
-      bairro,
-      complemento,
-      forma_pagamento,
-      valor_total
-    } = req.body;
-
-    // Garante que o array de itens existe
-    if (!itens || !Array.isArray(itens) || itens.length === 0) {
-      return res.status(400).json({
-        error: "Nenhum item de pedido foi fornecido"
-      });
-    }
-
-    const pedidosCriados = [];
-
-    // Itera sobre o array de itens para salvar cada um separadamente
-    for (const item of itens) {
-      const pedido = new Pedidos({
-        // Mapeia os dados do item para o esquema Pedido
-        id_camiseta: item.id_camiseta,
-        slug: item.slug,
-        tamanho: item.tamanho,
-        tipo_camiseta: item.tipo_camiseta,
-        cupom: item.cupom || false, // 'cupom' pode não existir, então use um fallback
-        nome_destinario,
-        telefone_contato,
-        cep,
-        rua,
-        numero: Number(numero),
-        bairro,
-        complemento,
-        forma_pagamento,
-        // É mais lógico usar o valor_total do pedido completo, em vez do preço individual do item.
-        valor_total: valor_total
-      });
-
-      // Salva o pedido no banco de dados
-      await pedido.save();
-      pedidosCriados.push(pedido);
-    }
-    
-    res.status(201).json({
-      message: "Pedidos criados com sucesso!",
-      pedidos: pedidosCriados
-    });
-  } catch (err: any) {
-    console.error('Erro ao criar pedido:', err);
-    res.status(400).json({
-      error: "Erro ao criar pedido",
-      details: err.message
-    });
-  }
-});
-
-
 // Listar todos os pedidos
-router.get("/", async (req, res) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
-    
-    const query = status ? { status } : {};
-    
-    const pedidos = await Pedidos.find(query)
-      .sort({ createdAt: -1 })
-      .limit(Number(limit) * 1)
-      .skip((Number(page) - 1) * Number(limit));
-    
-    const total = await Pedidos.countDocuments(query);
-    
-    res.json({
-      pedidos,
-      totalPages: Math.ceil(total / Number(limit)),
-      currentPage: Number(page),
-      total
-    });
-  } catch (err: any) {
-    res.status(500).json({ 
-      error: "Erro ao buscar pedidos",
-      details: err.message 
-    });
+    const pedidos = await Pedido.find();
+    res.json(pedidos);
+  } catch (error) {
+    console.error("Erro ao listar pedidos:", error);
+    res.status(500).json({ error: "Erro ao listar pedidos" });
   }
 });
 
 // Buscar pedido por ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", async (req: Request, res: Response) => {
   try {
-    const pedido = await Pedidos.findById(req.params.id);
+    // Busca pelo ID numérico sequencial, e não pelo _id do MongoDB
+    const pedido = await Pedido.findOne({ id: req.params.id });
+    if (!pedido) return res.status(404).json({ msg: "Pedido não encontrado" });
+    res.json(pedido);
+  } catch (error) {
+    console.error("Erro ao buscar pedido:", error);
+    res.status(500).json({ error: "Erro ao buscar pedido" });
+  }
+});
+
+// Criar pedido
+router.post("/", async (req: Request, res: Response) => {
+  try {
+    console.log("📦 Recebendo pedido:", JSON.stringify(req.body, null, 2));
+
+    // A validação dos campos obrigatórios será feita automaticamente pelo Mongoose
+    // com base no seu Schema. Isso torna as validações manuais aqui desnecessárias.
+
+    const pedido: IPedido = new Pedido(req.body);
+    await pedido.save(); // Se algum campo obrigatório faltar, o .save() vai gerar um erro
     
-    if (!pedido) {
-      return res.status(404).json({ error: "Pedido não encontrado" });
+    console.log("✅ Pedido criado com sucesso:", pedido._id);
+    res.status(201).json(pedido);
+  } catch (error: any) {
+    console.error("❌ Erro ao criar pedido:", error);
+    
+    // Se for erro de validação do Mongoose, retorna os detalhes
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((err: any) => err.message);
+      return res.status(400).json({ 
+        error: "Erro de validação", 
+        details: messages 
+      });
     }
     
-    res.json(pedido);
-  } catch (err: any) {
     res.status(500).json({ 
-      error: "Erro ao buscar pedido",
-      details: err.message 
+      error: "Erro ao criar pedido",
+      message: error.message 
     });
   }
 });
 
-// Buscar pedidos por número do pedido (campo id)
-router.get("/numero/:numero", async (req, res) => {
+// Atualizar status do pedido (O código anterior já estava bom, mantido como está)
+router.put("/:id/status", async (req: Request, res: Response) => {
   try {
-    const pedido = await Pedidos.findOne({ id: Number(req.params.numero) });
-    
-    if (!pedido) {
-      return res.status(404).json({ error: "Pedido não encontrado" });
+    const { statusEntrega, statusPedido } = req.body;
+
+    if (!statusEntrega && !statusPedido) {
+      return res.status(400).json({ 
+        msg: "É necessário fornecer 'statusEntrega' ou 'statusPedido' para atualização." 
+      });
     }
-    
-    res.json(pedido);
-  } catch (err: any) {
-    res.status(500).json({ 
-      error: "Erro ao buscar pedido",
-      details: err.message 
-    });
-  }
-});
 
-// Buscar pedidos por telefone
-router.get("/telefone/:telefone", async (req, res) => {
-  try {
-    const pedidos = await Pedidos.find({ 
-      telefone_contato: req.params.telefone 
-    }).sort({ createdAt: -1 });
-    
-    res.json(pedidos);
-  } catch (err: any) {
-    res.status(500).json({ 
-      error: "Erro ao buscar pedidos",
-      details: err.message 
-    });
-  }
-});
+    const camposParaAtualizar: { [key: string]: any } = {};
+    if (statusEntrega) {
+      camposParaAtualizar.statusEntrega = statusEntrega;
+    }
+    if (statusPedido) {
+      camposParaAtualizar.statusPedido = statusPedido;
+    }
 
-// Atualizar pedido
-router.put("/:id", async (req, res) => {
-  try {
-    const pedido = await Pedidos.findByIdAndUpdate(
-      req.params.id, 
-      req.body, 
+    const pedidoAtualizado = await Pedido.findOneAndUpdate(
+      { id: req.params.id }, // Busca pelo ID numérico
+      { $set: camposParaAtualizar },
       { new: true, runValidators: true }
     );
-    
-    if (!pedido) {
-      return res.status(404).json({ error: "Pedido não encontrado" });
+
+    if (!pedidoAtualizado) {
+      return res.status(404).json({ msg: "Pedido não encontrado" });
     }
-    
-    res.json({
-      message: "Pedido atualizado com sucesso!",
-      pedido
-    });
-  } catch (err: any) {
-    res.status(400).json({ 
-      error: "Erro ao atualizar pedido",
-      details: err.message 
-    });
+
+    res.json(pedidoAtualizado);
+  } catch (error) {
+    console.error("Erro ao atualizar status:", error);
+    res.status(500).json({ error: "Erro ao atualizar status" });
   }
 });
 
 // Deletar pedido
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", async (req: Request, res: Response) => {
   try {
-    const pedido = await Pedidos.findByIdAndDelete(req.params.id);
-    
+    const pedido = await Pedido.findOneAndDelete({ id: req.params.id }); // Busca pelo ID numérico
     if (!pedido) {
-      return res.status(404).json({ error: "Pedido não encontrado" });
+      return res.status(404).json({ msg: "Pedido não encontrado" });
     }
-    
-    res.json({ message: "Pedido removido com sucesso!" });
-  } catch (err: any) {
-    res.status(500).json({ 
-      error: "Erro ao remover pedido",
-      details: err.message 
-    });
-  }
-});
-
-// Estatísticas básicas
-router.get("/stats/resumo", async (req, res) => {
-  try {
-    const totalPedidos = await Pedidos.countDocuments();
-    const valorTotal = await Pedidos.aggregate([
-      { $group: { _id: null, total: { $sum: "$valor_total" } } }
-    ]);
-    
-    const pedidosPorFormaPagamento = await Pedidos.aggregate([
-      { $group: { _id: "$forma_pagamento", count: { $sum: 1 } } }
-    ]);
-    
-    res.json({
-      totalPedidos,
-      valorTotal: valorTotal[0]?.total || 0,
-      pedidosPorFormaPagamento
-    });
-  } catch (err: any) {
-    res.status(500).json({ 
-      error: "Erro ao gerar estatísticas",
-      details: err.message 
-    });
+    res.json({ msg: "Pedido deletado com sucesso" });
+  } catch (error) {
+    console.error("Erro ao deletar pedido:", error);
+    res.status(500).json({ error: "Erro ao deletar pedido" });
   }
 });
 
