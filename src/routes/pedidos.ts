@@ -15,6 +15,11 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
+// Rota leve apenas para keep-alive
+router.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Buscar pedido por ID
 router.get("/:id", async (req: Request, res: Response) => {
   try {
